@@ -111,7 +111,7 @@ func NewTreeWithHashStrategy(cs []Content, hashStrategy func() hash.Hash) (*Merk
 	return t, nil
 }
 
-// GetMerklePath: Get Merkle path and indexes(left leaf or right leaf)
+// GetMerklePath gets Merkle path and indexes(left leaf or right leaf)
 func (m *MerkleTree) GetMerklePath(content Content) ([][]byte, []int64, error) {
 	for _, current := range m.Leafs {
 		ok, err := current.C.Equals(content)
@@ -311,4 +311,17 @@ func (m *MerkleTree) String() string {
 		s += "\n"
 	}
 	return s
+}
+
+// NumNodes computes the number of nodes in the tree given by the root node @node.
+// Leafs are not counted.
+func NumNodes(node *Node) int {
+	count := 1
+	if node.Left.C == nil {
+		count += NumNodes(node.Left)
+	}
+	if node.Right.C == nil {
+		count += NumNodes(node.Right)
+	}
+	return count
 }
