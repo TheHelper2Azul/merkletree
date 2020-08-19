@@ -6,38 +6,96 @@ package merkletree
 import (
 	"bytes"
 	"crypto/sha256"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"hash"
 )
 
-//Content represents the data that is stored and verified by the tree. A type that
-//implements this interface can be used as an item in the tree.
+// Content represents the data that is stored and verified by the tree. A type that
+// implements this interface can be used as an item in the tree.
 type Content interface {
 	CalculateHash() ([]byte, error)
 	Equals(other Content) (bool, error)
 }
 
-//MerkleTree is the container for the tree. It holds a pointer to the root of the tree,
-//a list of pointers to the leaf nodes, and the merkle root.
+// MerkleTree is the container for the tree. It holds a pointer to the root of the tree,
+// a list of pointers to the leaf nodes, and the merkle root.
 type MerkleTree struct {
 	Root         *Node
 	merkleRoot   []byte
-	Leafs        []*Node
 	hashStrategy func() hash.Hash
+	Leafs        []*Node
 }
 
-//Node represents a node, root, or leaf in the tree. It stores pointers to its immediate
-//relationships, a hash, the content stored if it is a leaf, and other metadata.
+// Node represents a node, root, or leaf in the tree. It stores pointers to its immediate
+// relationships, a hash, the content stored if it is a leaf, and other metadata.
 type Node struct {
-	Tree   *MerkleTree
-	Parent *Node
 	Left   *Node
 	Right  *Node
-	leaf   bool
-	dup    bool
 	Hash   []byte
 	C      Content
+	tree   *MerkleTree
+	parent *Node
+	leaf   bool
+	dup    bool
+}
+
+// // MarshalBinary custom marshals a node casting Content to Bucket
+// func (n *Node) MarshalBinary() ([]byte, error) {
+
+// 	var node struct {
+// 		Left   *Node
+// 		Right  *Node
+// 		Hash   []byte
+// 		C      Bucket
+// 		tree   *MerkleTree
+// 		parent *Node
+// 		leaf   bool
+// 		dup    bool
+// 	}
+// 	node.Left = n.Left
+// 	node.Right = n.Right
+// 	node.Hash = n.Hash
+// 	if n.C != nil {
+// 		node.C = n.C.(Bucket)
+// 	}
+// 	node.tree = n.tree
+// 	node.parent = n.parent
+// 	node.leaf = n.leaf
+// 	node.dup = n.dup
+// 	data, err := json.Marshal(node)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	return data, nil
+// }
+
+// UnmarshalJSON custom unmarshals a node casting Content to StorageBucket
+func (n *Node) UnmarshalJSON(data []byte) error {
+
+	var node struct {
+		Left   *Node
+		Right  *Node
+		Hash   []byte
+		C      StorageBucket
+		tree   *MerkleTree
+		parent *Node
+		leaf   bool
+		dup    bool
+	}
+	if err := json.Unmarshal(data, &node); err != nil {
+		return err
+	}
+	n.Left = node.Left
+	n.Right = node.Right
+	n.Hash = node.Hash
+	n.C = node.C
+	n.tree = node.tree
+	n.parent = node.parent
+	n.leaf = node.leaf
+	n.dup = node.dup
+	return nil
 }
 
 //verifyNode walks down the tree until hitting a leaf, calculating the hash at each level
@@ -56,7 +114,7 @@ func (n *Node) verifyNode() ([]byte, error) {
 		return nil, err
 	}
 
-	h := n.Tree.hashStrategy()
+	h := n.tree.hashStrategy()
 	if _, err := h.Write(append(leftBytes, rightBytes...)); err != nil {
 		return nil, err
 	}
@@ -70,7 +128,7 @@ func (n *Node) calculateNodeHash() ([]byte, error) {
 		return n.C.CalculateHash()
 	}
 
-	h := n.Tree.hashStrategy()
+	h := n.tree.hashStrategy()
 	if _, err := h.Write(append(n.Left.Hash, n.Right.Hash...)); err != nil {
 		return nil, err
 	}
@@ -120,7 +178,7 @@ func (m *MerkleTree) GetMerklePath(content Content) ([][]byte, []int64, error) {
 		}
 
 		if ok {
-			currentParent := current.Parent
+			currentParent := current.parent
 			var merklePath [][]byte
 			var index []int64
 			for currentParent != nil {
@@ -132,7 +190,7 @@ func (m *MerkleTree) GetMerklePath(content Content) ([][]byte, []int64, error) {
 					index = append(index, 0) // left leaf
 				}
 				current = currentParent
-				currentParent = currentParent.Parent
+				currentParent = currentParent.parent
 			}
 			return merklePath, index, nil
 		}
@@ -158,7 +216,7 @@ func buildWithContent(cs []Content, t *MerkleTree) (*Node, []*Node, error) {
 			Hash: hash,
 			C:    c,
 			leaf: true,
-			Tree: t,
+			tree: t,
 		})
 	}
 	if len(leafs)%2 == 1 {
@@ -167,7 +225,7 @@ func buildWithContent(cs []Content, t *MerkleTree) (*Node, []*Node, error) {
 			C:    leafs[len(leafs)-1].C,
 			leaf: true,
 			dup:  true,
-			Tree: t,
+			tree: t,
 		}
 		leafs = append(leafs, duplicate)
 	}
@@ -197,11 +255,11 @@ func buildIntermediate(nl []*Node, t *MerkleTree) (*Node, error) {
 			Left:  nl[left],
 			Right: nl[right],
 			Hash:  h.Sum(nil),
-			Tree:  t,
+			tree:  t,
 		}
 		nodes = append(nodes, n)
-		nl[left].Parent = n
-		nl[right].Parent = n
+		nl[left].parent = n
+		nl[right].parent = n
 		if len(nl) == 2 {
 			return n, nil
 		}
@@ -212,6 +270,11 @@ func buildIntermediate(nl []*Node, t *MerkleTree) (*Node, error) {
 //MerkleRoot returns the unverified Merkle Root (hash of the root node) of the tree.
 func (m *MerkleTree) MerkleRoot() []byte {
 	return m.merkleRoot
+}
+
+// HashStrategy returns a tree's hash strategy
+func (m *MerkleTree) HashStrategy() func() hash.Hash {
+	return m.hashStrategy
 }
 
 //RebuildTree is a helper function that will rebuild the tree reusing only the content that
@@ -270,7 +333,7 @@ func (m *MerkleTree) VerifyContent(content Content) (bool, error) {
 		}
 
 		if ok {
-			currentParent := l.Parent
+			currentParent := l.parent
 			for currentParent != nil {
 				h := m.hashStrategy()
 				rightBytes, err := currentParent.Right.calculateNodeHash()
@@ -289,7 +352,7 @@ func (m *MerkleTree) VerifyContent(content Content) (bool, error) {
 				if bytes.Compare(h.Sum(nil), currentParent.Hash) != 0 {
 					return false, nil
 				}
-				currentParent = currentParent.Parent
+				currentParent = currentParent.parent
 			}
 			return true, nil
 		}
