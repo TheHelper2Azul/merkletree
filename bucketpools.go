@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
+	"github.com/ethereum/go-ethereum/log"
 )
 
 // -----------------------------------------------------------------------
@@ -68,15 +70,12 @@ func (b Bucket) Equals(other Content) (bool, error) {
 // StorageBucket is similar to a bucket.
 // In contrast to bucket it is only used for storage in influx and read, not for write.
 type StorageBucket struct {
-	Content []byte
-	// properties of the bucket
-	Topic    string
-	HashRate time.Duration
-	size     int
-	// values possibly assigned to the bucket
+	Content   []byte
+	Topic     string
+	HashRate  time.Duration
+	size      int
 	ID        string
 	Timestamp time.Time
-	used      bool
 }
 
 // CalculateHash calculates the hash of a StorageBucket. Is needed for a StorageBucket in
@@ -120,7 +119,6 @@ func bucketToStorage(b Bucket) (sb StorageBucket) {
 	sb.size = b.size
 	sb.ID = b.ID
 	sb.Timestamp = b.Timestamp
-	sb.used = b.used
 
 	return
 }
@@ -212,15 +210,47 @@ func (bp *BucketPool) Put(b Bucket) bool {
 	}
 }
 
-// WriteContent appends a byte array to a bucket if there is enough
+// WriteContent appends a byte slice to a bucket if there is enough
 // space. Does not write and returns false if there isn't.
 func (b *Bucket) WriteContent(bs []byte) bool {
 	if b.Content.Len()+len(bs) > b.Size() {
 		return false
 	}
 	b.Content.Write(bs)
+	// Separate content by newline for later data retrieval.
+	if b.Content.Len() < b.Size() {
+		fmt.Println("newline added")
+		b.Content.Write([]byte("\n"))
+	}
 	b.used = true
 	return true
+}
+
+// ReadContent returns the content of a storage bucket.
+// Each byte slice correponds to a marshaled data point such as an InterestRate.
+func (sb *StorageBucket) ReadContent() (data [][]byte, err error) {
+	buf := bytes.NewBuffer(sb.Content)
+	eof := false
+	for !eof {
+		item, err := buf.ReadBytes(byte('\n'))
+
+		if err == nil {
+			data = append(data, [][]byte{item[0 : len(item)-1]}...)
+		} else {
+			if err.Error() == "EOF" {
+				if len(item) > 0 {
+					// This case occurs when "\n" is exactly the last byte in the bucket
+					data = append(data, [][]byte{item}...)
+				}
+				eof = true
+			} else {
+				log.Error("error in reading bytes buffer: ", err)
+				return [][]byte{}, err
+			}
+		}
+
+	}
+	return
 }
 
 // MakeTree returns a Merkle tree built from the Buckets in the pool @bp
