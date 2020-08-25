@@ -28,6 +28,22 @@ type MerkleTree struct {
 	Leafs        []*Node
 }
 
+// ByteContent enables one to use (root) hashes as merkletree Content
+type ByteContent []byte
+
+// CalculateHash for ByteContent in order to implement Content.
+func (bc ByteContent) CalculateHash() ([]byte, error) {
+	return bc, nil
+}
+
+// Equals returns true if two ByteContents are identical, false otherwise
+func (bc ByteContent) Equals(other Content) (bool, error) {
+	if !EqualBytes(bc, other.(ByteContent)) {
+		return false, nil
+	}
+	return true, nil
+}
+
 // Node represents a node, root, or leaf in the tree. It stores pointers to its immediate
 // relationships, a hash, the content stored if it is a leaf, and other metadata.
 type Node struct {
@@ -40,36 +56,6 @@ type Node struct {
 	leaf   bool
 	dup    bool
 }
-
-// // MarshalBinary custom marshals a node casting Content to Bucket
-// func (n *Node) MarshalBinary() ([]byte, error) {
-
-// 	var node struct {
-// 		Left   *Node
-// 		Right  *Node
-// 		Hash   []byte
-// 		C      Bucket
-// 		tree   *MerkleTree
-// 		parent *Node
-// 		leaf   bool
-// 		dup    bool
-// 	}
-// 	node.Left = n.Left
-// 	node.Right = n.Right
-// 	node.Hash = n.Hash
-// 	if n.C != nil {
-// 		node.C = n.C.(Bucket)
-// 	}
-// 	node.tree = n.tree
-// 	node.parent = n.parent
-// 	node.leaf = n.leaf
-// 	node.dup = n.dup
-// 	data, err := json.Marshal(node)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	return data, nil
-// }
 
 // UnmarshalJSON custom unmarshals a node casting Content to StorageBucket
 func (n *Node) UnmarshalJSON(data []byte) error {
@@ -152,9 +138,18 @@ func NewTree(cs []Content) (*MerkleTree, error) {
 	return t, nil
 }
 
+// TreesToTree returns a merkle tree made from the root hashes of the trees from @trees
+func TreesToTree(trees []MerkleTree) (*MerkleTree, error) {
+	var merkleRoots []Content
+	for _, tree := range trees {
+		merkleRoots = append(merkleRoots, ByteContent(tree.MerkleRoot()))
+	}
+	return NewTree(merkleRoots)
+}
+
 //NewTreeWithHashStrategy creates a new Merkle Tree using the content cs using the provided hash
 //strategy. Note that the hash type used in the type that implements the Content interface must
-//match the hash type profided to the tree.
+//match the hash type provided to the tree.
 func NewTreeWithHashStrategy(cs []Content, hashStrategy func() hash.Hash) (*MerkleTree, error) {
 	t := &MerkleTree{
 		hashStrategy: hashStrategy,
