@@ -303,6 +303,18 @@ func (m *MerkleTree) RebuildTreeWith(cs []Content) error {
 	return nil
 }
 
+// ExtendTree extends the merkle tree @m by the content @cs
+func (m *MerkleTree) ExtendTree(cs []Content) error {
+	leafs := m.Leafs
+	var content []Content
+	for _, leaf := range leafs {
+		content = append(content, leaf.C)
+	}
+	content = append(content, cs...)
+	err := m.RebuildTreeWith(content)
+	return err
+}
+
 //VerifyTree verify tree validates the hashes at each level of the tree and returns true if the
 //resulting hash at the root of the tree matches the resulting root hash; returns false otherwise.
 func (m *MerkleTree) VerifyTree() (bool, error) {
