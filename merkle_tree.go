@@ -23,7 +23,7 @@ type Content interface {
 // a list of pointers to the leaf nodes, and the merkle root.
 type MerkleTree struct {
 	Root         *Node
-	merkleRoot   []byte
+	MerkleRoot   []byte
 	hashStrategy func() hash.Hash
 	Leafs        []*Node
 }
@@ -33,7 +33,7 @@ type ByteContent []byte
 
 // CalculateHash for ByteContent in order to implement Content.
 func (bc ByteContent) CalculateHash() ([]byte, error) {
-	return bc, nil
+	return []byte(bc), nil
 }
 
 // Equals returns true if two ByteContents are identical, false otherwise
@@ -59,7 +59,6 @@ type Node struct {
 
 // UnmarshalJSON custom unmarshals a node casting Content to StorageBucket
 func (n *Node) UnmarshalJSON(data []byte) error {
-
 	var node struct {
 		Left   *Node
 		Right  *Node
@@ -81,6 +80,7 @@ func (n *Node) UnmarshalJSON(data []byte) error {
 	n.parent = node.parent
 	n.leaf = node.leaf
 	n.dup = node.dup
+
 	return nil
 }
 
@@ -134,7 +134,7 @@ func NewTree(cs []Content) (*MerkleTree, error) {
 	}
 	t.Root = root
 	t.Leafs = leafs
-	t.merkleRoot = root.Hash
+	t.MerkleRoot = root.Hash
 	return t, nil
 }
 
@@ -142,7 +142,9 @@ func NewTree(cs []Content) (*MerkleTree, error) {
 func TreesToTree(trees []MerkleTree) (*MerkleTree, error) {
 	var merkleRoots []Content
 	for _, tree := range trees {
-		merkleRoots = append(merkleRoots, ByteContent(tree.MerkleRoot()))
+		sb := StorageBucket{Content: (&tree).MerkleRoot}
+		merkleRoots = append(merkleRoots, sb)
+		// merkleRoots = append(merkleRoots, ByteContent((&tree).MerkleRoot))
 	}
 	return NewTree(merkleRoots)
 }
@@ -160,7 +162,7 @@ func NewTreeWithHashStrategy(cs []Content, hashStrategy func() hash.Hash) (*Merk
 	}
 	t.Root = root
 	t.Leafs = leafs
-	t.merkleRoot = root.Hash
+	t.MerkleRoot = root.Hash
 	return t, nil
 }
 
@@ -206,7 +208,6 @@ func buildWithContent(cs []Content, t *MerkleTree) (*Node, []*Node, error) {
 		if err != nil {
 			return nil, nil, err
 		}
-
 		leafs = append(leafs, &Node{
 			Hash: hash,
 			C:    c,
@@ -262,10 +263,10 @@ func buildIntermediate(nl []*Node, t *MerkleTree) (*Node, error) {
 	return buildIntermediate(nodes, t)
 }
 
-//MerkleRoot returns the unverified Merkle Root (hash of the root node) of the tree.
-func (m *MerkleTree) MerkleRoot() []byte {
-	return m.merkleRoot
-}
+// //MerkleRoot returns the unverified Merkle Root (hash of the root node) of the tree.
+// func (m *MerkleTree) MerkleRoot() []byte {
+// 	return m.MerkleRoot
+// }
 
 // HashStrategy returns a tree's hash strategy
 func (m *MerkleTree) HashStrategy() func() hash.Hash {
@@ -285,7 +286,7 @@ func (m *MerkleTree) RebuildTree() error {
 	}
 	m.Root = root
 	m.Leafs = leafs
-	m.merkleRoot = root.Hash
+	m.MerkleRoot = root.Hash
 	return nil
 }
 
@@ -299,7 +300,7 @@ func (m *MerkleTree) RebuildTreeWith(cs []Content) error {
 	}
 	m.Root = root
 	m.Leafs = leafs
-	m.merkleRoot = root.Hash
+	m.MerkleRoot = root.Hash
 	return nil
 }
 
@@ -308,7 +309,9 @@ func (m *MerkleTree) ExtendTree(cs []Content) error {
 	leafs := m.Leafs
 	var content []Content
 	for _, leaf := range leafs {
-		content = append(content, leaf.C)
+		if !leaf.dup {
+			content = append(content, leaf.C)
+		}
 	}
 	content = append(content, cs...)
 	err := m.RebuildTreeWith(content)
@@ -323,7 +326,7 @@ func (m *MerkleTree) VerifyTree() (bool, error) {
 		return false, err
 	}
 
-	if bytes.Compare(m.merkleRoot, calculatedMerkleRoot) == 0 {
+	if bytes.Compare(m.MerkleRoot, calculatedMerkleRoot) == 0 {
 		return true, nil
 	}
 	return false, nil
@@ -333,7 +336,8 @@ func (m *MerkleTree) VerifyTree() (bool, error) {
 //Returns true if the expected Merkle Root is equivalent to the Merkle root calculated on the critical path
 //for a given content. Returns true if valid and false otherwise.
 func (m *MerkleTree) VerifyContent(content Content) (bool, error) {
-	for _, l := range m.Leafs {
+	for i, l := range m.Leafs {
+		fmt.Println("i: ", i)
 		ok, err := l.C.Equals(content)
 		if err != nil {
 			return false, err
