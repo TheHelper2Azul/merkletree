@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ethereum/go-ethereum/log"
+	log "github.com/sirupsen/logrus"
 )
 
 // -----------------------------------------------------------------------
@@ -25,9 +25,10 @@ type Bucket struct {
 	// properties of the bucket
 	Topic    string
 	HashRate time.Duration
-	size     int
+	size     uint64
 	// values possibly assigned to the bucket
-	ID        string
+	ID string
+	// Timestamp is the time, the filled bucket is put into the pool
 	Timestamp time.Time
 	used      bool
 }
@@ -70,10 +71,11 @@ func (b Bucket) Equals(other Content) (bool, error) {
 // StorageBucket is similar to a bucket.
 // In contrast to bucket it is only used for storage in influx and read, not for write.
 type StorageBucket struct {
-	Content   []byte
+	Content []byte
+	// TO DO: make HashRate and Size dependent on Topic?
 	Topic     string
 	HashRate  time.Duration
-	size      int
+	Size      uint64
 	ID        string
 	Timestamp time.Time
 }
@@ -95,7 +97,7 @@ func (sb StorageBucket) Equals(other Content) (bool, error) {
 	if !EqualBytes(sb.Content, other.(StorageBucket).Content) {
 		return false, nil
 	}
-	if sb.size != other.(StorageBucket).size {
+	if sb.Size != other.(StorageBucket).Size {
 		return false, nil
 	}
 	if sb.ID != other.(StorageBucket).ID {
@@ -116,7 +118,7 @@ func bucketToStorage(b Bucket) (sb StorageBucket) {
 	sb.Content = b.Content.Bytes()
 	sb.Topic = b.Topic
 	sb.HashRate = b.HashRate
-	sb.size = b.size
+	sb.Size = b.size
 	sb.ID = b.ID
 	sb.Timestamp = b.Timestamp
 
@@ -126,13 +128,13 @@ func bucketToStorage(b Bucket) (sb StorageBucket) {
 // BucketPool implements a leaky pool of Buckets in the form of a bounded channel.
 type BucketPool struct {
 	c     chan Bucket
-	width int
+	width uint64
 	Topic string
 }
 
 // NewBucket creates a new bucket of size @size.
 // TO DO: Extend to Type of Bucket (and pool below)
-func NewBucket(size int, topic string) (b *Bucket) {
+func NewBucket(size uint64, topic string) (b *Bucket) {
 	return &Bucket{
 		Content: bytes.NewBuffer(make([]byte, 0, size)),
 		size:    size,
@@ -142,14 +144,14 @@ func NewBucket(size int, topic string) (b *Bucket) {
 
 // NewBucketPool creates a new BucketPool bounded to the given maxSize.
 // It is initialized with empty Buckets sized based on width.
-func NewBucketPool(maxNum int, size int, topic string) (bp *BucketPool) {
+func NewBucketPool(maxNum uint64, size uint64, topic string) (bp *BucketPool) {
 	bp = &BucketPool{
 		c:     make(chan Bucket, maxNum),
 		width: size,
 		Topic: topic,
 	}
 	// Fill channel with empty buckets
-	for i := 0; i < maxNum; i++ {
+	for i := 0; i < int(maxNum); i++ {
 		bucket := NewBucket(size, topic)
 		bp.c <- *bucket
 	}
@@ -157,7 +159,7 @@ func NewBucketPool(maxNum int, size int, topic string) (bp *BucketPool) {
 }
 
 // Size returns the size of a bucket
-func (b *Bucket) Size() int {
+func (b *Bucket) Size() uint64 {
 	return b.size
 }
 
@@ -213,12 +215,12 @@ func (bp *BucketPool) Put(b Bucket) bool {
 // WriteContent appends a byte slice to a bucket if there is enough
 // space. Does not write and returns false if there isn't.
 func (b *Bucket) WriteContent(bs []byte) bool {
-	if b.Content.Len()+len(bs) > b.Size() {
+	if b.Content.Len()+len(bs) > int(b.Size()) {
 		return false
 	}
 	b.Content.Write(bs)
 	// Separate content by newline for later data retrieval.
-	if b.Content.Len() < b.Size() {
+	if b.Content.Len() < int(b.Size()) {
 		fmt.Println("newline added")
 		b.Content.Write([]byte("\n"))
 	}

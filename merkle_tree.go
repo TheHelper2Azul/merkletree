@@ -308,6 +308,7 @@ func (m *MerkleTree) RebuildTreeWith(cs []Content) error {
 func (m *MerkleTree) ExtendTree(cs []Content) error {
 	leafs := m.Leafs
 	var content []Content
+	// TO DO: Caution with dup. For unmarshaled trees this field is lost.
 	for _, leaf := range leafs {
 		if !leaf.dup {
 			content = append(content, leaf.C)
