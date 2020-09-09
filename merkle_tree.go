@@ -138,8 +138,8 @@ func NewTree(cs []Content) (*MerkleTree, error) {
 	return t, nil
 }
 
-// TreesToTree returns a merkle tree made from the root hashes of the trees from @trees
-func TreesToTree(trees []MerkleTree) (*MerkleTree, error) {
+// ForestToTree returns a merkle tree made from the root hashes of the trees from @trees
+func ForestToTree(trees []MerkleTree) (*MerkleTree, error) {
 	var merkleRoots []Content
 	for _, tree := range trees {
 		sb := StorageBucket{Content: (&tree).MerkleRoot}
