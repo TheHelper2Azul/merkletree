@@ -24,8 +24,17 @@ type Content interface {
 type MerkleTree struct {
 	Root         *Node
 	MerkleRoot   []byte
-	hashStrategy func() hash.Hash
+	HashStrategy string
 	Leafs        []*Node
+}
+
+// GetHashStrategies returns a map which maps the hash strategy name as a string
+// to the corresponding hashing function.
+func GetHashStrategies() map[string]hash.Hash {
+	hashMap := map[string]hash.Hash{
+		"sha256": sha256.New(),
+	}
+	return hashMap
 }
 
 // ByteContent enables one to use (root) hashes as merkletree Content
@@ -100,7 +109,9 @@ func (n *Node) verifyNode() ([]byte, error) {
 		return nil, err
 	}
 
-	h := n.tree.hashStrategy()
+	// h := n.tree.hashStrategy()
+	hashMap := GetHashStrategies()
+	h := hashMap[n.tree.HashStrategy]
 	if _, err := h.Write(append(leftBytes, rightBytes...)); err != nil {
 		return nil, err
 	}
@@ -114,7 +125,8 @@ func (n *Node) calculateNodeHash() ([]byte, error) {
 		return n.C.CalculateHash()
 	}
 
-	h := n.tree.hashStrategy()
+	hashMap := GetHashStrategies()
+	h := hashMap[n.tree.HashStrategy]
 	if _, err := h.Write(append(n.Left.Hash, n.Right.Hash...)); err != nil {
 		return nil, err
 	}
@@ -124,9 +136,9 @@ func (n *Node) calculateNodeHash() ([]byte, error) {
 
 //NewTree creates a new Merkle Tree using the content cs.
 func NewTree(cs []Content) (*MerkleTree, error) {
-	var defaultHashStrategy = sha256.New
+	var defaultHashStrategy = "sha256"
 	t := &MerkleTree{
-		hashStrategy: defaultHashStrategy,
+		HashStrategy: defaultHashStrategy,
 	}
 	root, leafs, err := buildWithContent(cs, t)
 	if err != nil {
@@ -152,9 +164,9 @@ func ForestToTree(trees []MerkleTree) (*MerkleTree, error) {
 //NewTreeWithHashStrategy creates a new Merkle Tree using the content cs using the provided hash
 //strategy. Note that the hash type used in the type that implements the Content interface must
 //match the hash type provided to the tree.
-func NewTreeWithHashStrategy(cs []Content, hashStrategy func() hash.Hash) (*MerkleTree, error) {
+func NewTreeWithHashStrategy(cs []Content, hashStrategy string) (*MerkleTree, error) {
 	t := &MerkleTree{
-		hashStrategy: hashStrategy,
+		HashStrategy: hashStrategy,
 	}
 	root, leafs, err := buildWithContent(cs, t)
 	if err != nil {
@@ -237,8 +249,9 @@ func buildWithContent(cs []Content, t *MerkleTree) (*Node, []*Node, error) {
 //the intermediate and root levels of the tree. Returns the resulting root node of the tree.
 func buildIntermediate(nl []*Node, t *MerkleTree) (*Node, error) {
 	var nodes []*Node
+	hashMap := GetHashStrategies()
 	for i := 0; i < len(nl); i += 2 {
-		h := t.hashStrategy()
+		h := hashMap[t.HashStrategy]
 		var left, right int = i, i + 1
 		if i+1 == len(nl) {
 			right = i
@@ -261,16 +274,6 @@ func buildIntermediate(nl []*Node, t *MerkleTree) (*Node, error) {
 		}
 	}
 	return buildIntermediate(nodes, t)
-}
-
-// //MerkleRoot returns the unverified Merkle Root (hash of the root node) of the tree.
-// func (m *MerkleTree) MerkleRoot() []byte {
-// 	return m.MerkleRoot
-// }
-
-// HashStrategy returns a tree's hash strategy
-func (m *MerkleTree) HashStrategy() func() hash.Hash {
-	return m.hashStrategy
 }
 
 //RebuildTree is a helper function that will rebuild the tree reusing only the content that
@@ -337,8 +340,8 @@ func (m *MerkleTree) VerifyTree() (bool, error) {
 //Returns true if the expected Merkle Root is equivalent to the Merkle root calculated on the critical path
 //for a given content. Returns true if valid and false otherwise.
 func (m *MerkleTree) VerifyContent(content Content) (bool, error) {
-	for i, l := range m.Leafs {
-		fmt.Println("i: ", i)
+	hashMap := GetHashStrategies()
+	for _, l := range m.Leafs {
 		ok, err := l.C.Equals(content)
 		if err != nil {
 			return false, err
@@ -347,7 +350,7 @@ func (m *MerkleTree) VerifyContent(content Content) (bool, error) {
 		if ok {
 			currentParent := l.parent
 			for currentParent != nil {
-				h := m.hashStrategy()
+				h := hashMap[m.HashStrategy]
 				rightBytes, err := currentParent.Right.calculateNodeHash()
 				if err != nil {
 					return false, err

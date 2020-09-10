@@ -258,7 +258,8 @@ func (sb *StorageBucket) ReadContent() (data [][]byte, err error) {
 // MakeTree returns a Merkle tree built from the Buckets in the pool @bp
 func MakeTree(bp *BucketPool) (*MerkleTree, error) {
 	leafs := []Content{}
-	for i := 0; i < bp.Len(); i++ {
+	numBuckets := bp.Len()
+	for i := 0; i < numBuckets; i++ {
 		storageBucket := bucketToStorage(<-bp.c)
 		leafs = append(leafs, storageBucket)
 	}
