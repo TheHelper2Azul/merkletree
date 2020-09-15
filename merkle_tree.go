@@ -63,7 +63,7 @@ type Node struct {
 	tree   *MerkleTree
 	parent *Node
 	leaf   bool
-	dup    bool
+	Dup    bool
 }
 
 // UnmarshalJSON custom unmarshals a node casting Content to StorageBucket
@@ -76,7 +76,7 @@ func (n *Node) UnmarshalJSON(data []byte) error {
 		tree   *MerkleTree
 		parent *Node
 		leaf   bool
-		dup    bool
+		Dup    bool
 	}
 	if err := json.Unmarshal(data, &node); err != nil {
 		return err
@@ -88,7 +88,7 @@ func (n *Node) UnmarshalJSON(data []byte) error {
 	n.tree = node.tree
 	n.parent = node.parent
 	n.leaf = node.leaf
-	n.dup = node.dup
+	n.Dup = node.Dup
 
 	return nil
 }
@@ -232,7 +232,7 @@ func buildWithContent(cs []Content, t *MerkleTree) (*Node, []*Node, error) {
 			Hash: leafs[len(leafs)-1].Hash,
 			C:    leafs[len(leafs)-1].C,
 			leaf: true,
-			dup:  true,
+			Dup:  true,
 			tree: t,
 		}
 		leafs = append(leafs, duplicate)
@@ -311,9 +311,8 @@ func (m *MerkleTree) RebuildTreeWith(cs []Content) error {
 func (m *MerkleTree) ExtendTree(cs []Content) error {
 	leafs := m.Leafs
 	var content []Content
-	// TO DO: Caution with dup. For unmarshaled trees this field is lost.
 	for _, leaf := range leafs {
-		if !leaf.dup {
+		if !leaf.Dup {
 			content = append(content, leaf.C)
 		}
 	}
@@ -377,7 +376,7 @@ func (m *MerkleTree) VerifyContent(content Content) (bool, error) {
 
 //String returns a string representation of the node.
 func (n *Node) String() string {
-	return fmt.Sprintf("%t %t %v %s", n.leaf, n.dup, n.Hash, n.C)
+	return fmt.Sprintf("%t %t %v %s", n.leaf, n.Dup, n.Hash, n.C)
 }
 
 //String returns a string representation of the tree. Only leaf nodes are included
