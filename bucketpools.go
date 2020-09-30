@@ -219,9 +219,9 @@ func (b *Bucket) WriteContent(bs []byte) bool {
 		return false
 	}
 	b.Content.Write(bs)
+	// TO DO: Switch to writing length of write action in front of data
 	// Separate content by newline for later data retrieval.
 	if b.Content.Len() < int(b.Size()) {
-		fmt.Println("newline added")
 		b.Content.Write([]byte("\n"))
 	}
 	b.used = true
