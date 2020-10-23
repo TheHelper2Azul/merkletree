@@ -402,3 +402,11 @@ func NumNodes(node *Node) int {
 	}
 	return count
 }
+
+// Isempty returns true if merkle tree at @m is empty, false otherwise
+func (m *MerkleTree) Isempty() bool {
+	if m.Root == nil {
+		return true
+	}
+	return false
+}
