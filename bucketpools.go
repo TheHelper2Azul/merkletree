@@ -3,11 +3,10 @@ package merkletree
 import (
 	"bytes"
 	"crypto/sha256"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"time"
-
-	log "github.com/sirupsen/logrus"
 )
 
 // -----------------------------------------------------------------------
@@ -212,47 +211,47 @@ func (bp *BucketPool) Put(b Bucket) bool {
 	}
 }
 
-// WriteContent appends a byte slice to a bucket if there is enough
-// space. Does not write and returns false if there isn't.
+// WriteContent appends a byte slice to a bucket if there is enough space.
+// Does not write and returns false if there isn't.
+// Contents are separated by leading 64bit unsigned integers.
 func (b *Bucket) WriteContent(bs []byte) bool {
-	if b.Content.Len()+len(bs) > int(b.Size()) {
+	if b.Content.Len()+len(bs)+8 > int(b.Size()) {
 		return false
 	}
+	// Store length of content as 8-byte array
+	lenPrefix := make([]byte, 8)
+	binary.LittleEndian.PutUint64(lenPrefix, uint64(len(bs)))
+	// Write length and content
+	b.Content.Write(lenPrefix)
 	b.Content.Write(bs)
-	// TO DO: Switch to writing length of write action in front of data
-	// Separate content by newline for later data retrieval.
-	if b.Content.Len() < int(b.Size()) {
-		b.Content.Write([]byte("\n"))
-	}
+
 	b.used = true
 	return true
+
 }
 
 // ReadContent returns the content of a storage bucket.
 // Each byte slice correponds to a marshaled data point such as an InterestRate.
 func (sb *StorageBucket) ReadContent() (data [][]byte, err error) {
 	buf := bytes.NewBuffer(sb.Content)
-	eof := false
-	for !eof {
-		item, err := buf.ReadBytes(byte('\n'))
-
-		if err == nil {
-			data = append(data, [][]byte{item[0 : len(item)-1]}...)
+	readOn := true
+	for readOn {
+		// get length of content byte slice by reading the prefix
+		lenPrefix := make([]byte, 8)
+		buf.Read(lenPrefix)
+		lenContent := binary.LittleEndian.Uint64(lenPrefix)
+		if lenContent > 0 {
+			// In case there is content read it...
+			content := make([]byte, lenContent)
+			buf.Read(content)
+			data = append(data, [][]byte{content}...)
 		} else {
-			if err.Error() == "EOF" {
-				if len(item) > 0 {
-					// This case occurs when "\n" is exactly the last byte in the bucket
-					data = append(data, [][]byte{item}...)
-				}
-				eof = true
-			} else {
-				log.Error("error in reading bytes buffer: ", err)
-				return [][]byte{}, err
-			}
+			// ...otherwise stop reading
+			readOn = false
 		}
-
 	}
 	return
+
 }
 
 // MakeTree returns a Merkle tree built from the Buckets in the pool @bp
