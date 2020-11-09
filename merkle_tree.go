@@ -47,7 +47,7 @@ func (bc ByteContent) CalculateHash() ([]byte, error) {
 
 // Equals returns true if two ByteContents are identical, false otherwise
 func (bc ByteContent) Equals(other Content) (bool, error) {
-	if !EqualBytes(bc, other.(ByteContent)) {
+	if bytes.Compare(bc, other.(ByteContent)) != 0 {
 		return false, nil
 	}
 	return true, nil
@@ -93,32 +93,6 @@ func (n *Node) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-//verifyNode walks down the tree until hitting a leaf, calculating the hash at each level
-//and returning the resulting hash of Node n.
-func (n *Node) verifyNode() ([]byte, error) {
-	if n.leaf {
-		return n.C.CalculateHash()
-	}
-	rightBytes, err := n.Right.verifyNode()
-	if err != nil {
-		return nil, err
-	}
-
-	leftBytes, err := n.Left.verifyNode()
-	if err != nil {
-		return nil, err
-	}
-
-	// h := n.tree.hashStrategy()
-	hashMap := GetHashStrategies()
-	h := hashMap[n.tree.HashStrategy]
-	if _, err := h.Write(append(leftBytes, rightBytes...)); err != nil {
-		return nil, err
-	}
-
-	return h.Sum(nil), nil
-}
-
 //calculateNodeHash is a helper function that calculates the hash of the node.
 func (n *Node) calculateNodeHash() ([]byte, error) {
 	if n.leaf {
@@ -130,7 +104,6 @@ func (n *Node) calculateNodeHash() ([]byte, error) {
 	if _, err := h.Write(append(n.Left.Hash, n.Right.Hash...)); err != nil {
 		return nil, err
 	}
-
 	return h.Sum(nil), nil
 }
 
@@ -249,8 +222,9 @@ func buildWithContent(cs []Content, t *MerkleTree) (*Node, []*Node, error) {
 //the intermediate and root levels of the tree. Returns the resulting root node of the tree.
 func buildIntermediate(nl []*Node, t *MerkleTree) (*Node, error) {
 	var nodes []*Node
-	hashMap := GetHashStrategies()
+
 	for i := 0; i < len(nl); i += 2 {
+		hashMap := GetHashStrategies()
 		h := hashMap[t.HashStrategy]
 		var left, right int = i, i + 1
 		if i+1 == len(nl) {
@@ -321,6 +295,29 @@ func (m *MerkleTree) ExtendTree(cs []Content) error {
 	return err
 }
 
+//verifyNode walks down the tree until hitting a leaf, calculating the hash at each level
+//and returning the resulting hash of Node n.
+func (n *Node) verifyNode() ([]byte, error) {
+	if n.leaf {
+		return n.C.CalculateHash()
+	}
+	rightBytes, err := n.Right.verifyNode()
+	if err != nil {
+		return nil, err
+	}
+
+	leftBytes, err := n.Left.verifyNode()
+	if err != nil {
+		return nil, err
+	}
+	hashMap := GetHashStrategies()
+	h := hashMap[n.tree.HashStrategy]
+	if _, err := h.Write(append(leftBytes, rightBytes...)); err != nil {
+		return nil, err
+	}
+	return h.Sum(nil), nil
+}
+
 //VerifyTree verify tree validates the hashes at each level of the tree and returns true if the
 //resulting hash at the root of the tree matches the resulting root hash; returns false otherwise.
 func (m *MerkleTree) VerifyTree() (bool, error) {
@@ -339,7 +336,7 @@ func (m *MerkleTree) VerifyTree() (bool, error) {
 //Returns true if the expected Merkle Root is equivalent to the Merkle root calculated on the critical path
 //for a given content. Returns true if valid and false otherwise.
 func (m *MerkleTree) VerifyContent(content Content) (bool, error) {
-	hashMap := GetHashStrategies()
+
 	for _, l := range m.Leafs {
 		ok, err := l.C.Equals(content)
 		if err != nil {
@@ -349,6 +346,7 @@ func (m *MerkleTree) VerifyContent(content Content) (bool, error) {
 		if ok {
 			currentParent := l.parent
 			for currentParent != nil {
+				hashMap := GetHashStrategies()
 				h := hashMap[m.HashStrategy]
 				rightBytes, err := currentParent.Right.calculateNodeHash()
 				if err != nil {

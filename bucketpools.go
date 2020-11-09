@@ -49,7 +49,7 @@ func (b Bucket) CalculateHash() ([]byte, error) {
 // order to implement Content from merkle_tree.
 func (b Bucket) Equals(other Content) (bool, error) {
 	// Extend for other fields, but which? Do we need all fields?
-	if !EqualBytes(b.Content.Bytes(), other.(Bucket).Content.Bytes()) {
+	if bytes.Compare(b.Content.Bytes(), other.(Bucket).Content.Bytes()) != 0 {
 		return false, nil
 	}
 	if b.size != other.(Bucket).size {
@@ -93,7 +93,7 @@ func (sb StorageBucket) CalculateHash() ([]byte, error) {
 // order to implement Content from merkle_tree.
 func (sb StorageBucket) Equals(other Content) (bool, error) {
 	// Extend for other fields, but which? Do we need all fields?
-	if !EqualBytes(sb.Content, other.(StorageBucket).Content) {
+	if bytes.Compare(sb.Content, other.(StorageBucket).Content) != 0 {
 		return false, nil
 	}
 	if sb.Size != other.(StorageBucket).Size {
@@ -131,8 +131,7 @@ type BucketPool struct {
 	Topic string
 }
 
-// NewBucket creates a new bucket of size @size.
-// TO DO: Extend to Type of Bucket (and pool below)
+// NewBucket creates a new bucket of size @size in bytes.
 func NewBucket(size uint64, topic string) (b *Bucket) {
 	return &Bucket{
 		Content: bytes.NewBuffer(make([]byte, 0, size)),
@@ -231,7 +230,8 @@ func (b *Bucket) WriteContent(bs []byte) bool {
 }
 
 // ReadContent returns the content of a storage bucket.
-// Each byte slice correponds to a marshaled data point such as an InterestRate.
+// Each byte slice correponds to a marshaled data point such as an
+// interest rate or a trade.
 func (sb *StorageBucket) ReadContent() (data [][]byte, err error) {
 	buf := bytes.NewBuffer(sb.Content)
 	readOn := true
@@ -266,15 +266,15 @@ func MakeTree(bp *BucketPool) (*MerkleTree, error) {
 	return t, err
 }
 
-// EqualBytes compares two byte slices. Should be put into some helper package.
-func EqualBytes(a, b []byte) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i, v := range a {
-		if v != b[i] {
-			return false
-		}
-	}
-	return true
-}
+// // EqualBytes compares two byte slices. Should be put into some helper package.
+// func EqualBytes(a, b []byte) bool {
+// 	if len(a) != len(b) {
+// 		return false
+// 	}
+// 	for i, v := range a {
+// 		if v != b[i] {
+// 			return false
+// 		}
+// 	}
+// 	return true
+// }
