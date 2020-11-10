@@ -5,8 +5,9 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"time"
+
+	log "github.com/sirupsen/logrus"
 )
 
 // -----------------------------------------------------------------------
@@ -140,8 +141,8 @@ func NewBucket(size uint64, topic string) (b *Bucket) {
 	}
 }
 
-// NewBucketPool creates a new BucketPool bounded to the given maxSize.
-// It is initialized with empty Buckets sized based on width.
+// NewBucketPool creates a new BucketPool bounded to the length @maxNum.
+// It is initialized with empty Buckets of capacity @size.
 func NewBucketPool(maxNum uint64, size uint64, topic string) (bp *BucketPool) {
 	bp = &BucketPool{
 		c:     make(chan Bucket, maxNum),
@@ -196,7 +197,7 @@ func (bp *BucketPool) Get() (b Bucket, err error) {
 func (bp *BucketPool) Put(b Bucket) bool {
 	// Check whether Bucket is of the right kind. If not, reject.
 	if bp.Topic != b.Topic {
-		fmt.Println("error with topics")
+		log.Error("topic error: only one topic per pool.")
 		return false
 	}
 
@@ -243,7 +244,7 @@ func (sb *StorageBucket) ReadContent() (data [][]byte, err error) {
 		if lenContent > 0 {
 			// In case there is content read it...
 			content := make([]byte, lenContent)
-			buf.Read(content)
+			_, err = buf.Read(content)
 			data = append(data, [][]byte{content}...)
 		} else {
 			// ...otherwise stop reading
@@ -265,16 +266,3 @@ func MakeTree(bp *BucketPool) (*MerkleTree, error) {
 	t, err := NewTree(leafs)
 	return t, err
 }
-
-// // EqualBytes compares two byte slices. Should be put into some helper package.
-// func EqualBytes(a, b []byte) bool {
-// 	if len(a) != len(b) {
-// 		return false
-// 	}
-// 	for i, v := range a {
-// 		if v != b[i] {
-// 			return false
-// 		}
-// 	}
-// 	return true
-// }
