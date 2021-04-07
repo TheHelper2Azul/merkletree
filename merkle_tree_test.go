@@ -190,7 +190,7 @@ func TestNewTree(t *testing.T) {
 		if err != nil {
 			t.Errorf("[case:%d] error: unexpected error: %v", table[i].testCaseId, err)
 		}
-		if bytes.Compare(tree.MerkleRoot, table[i].expectedHash) != 0 {
+		if !bytes.Equal(tree.MerkleRoot, table[i].expectedHash) {
 			t.Errorf("[case:%d] error: expected hash equal to %v got %v", table[i].testCaseId, table[i].expectedHash, tree.MerkleRoot)
 		}
 	}
@@ -220,7 +220,7 @@ func TestMerkleTree_MerkleRoot(t *testing.T) {
 		if err != nil {
 			t.Errorf("[case:%d] error: unexpected error: %v", table[i].testCaseId, err)
 		}
-		if bytes.Compare(tree.MerkleRoot, table[i].expectedHash) != 0 {
+		if !bytes.Equal(tree.MerkleRoot, table[i].expectedHash) {
 			t.Errorf("[case:%d] error: expected hash equal to %v got %v", table[i].testCaseId, table[i].expectedHash, tree.MerkleRoot)
 		}
 	}
@@ -242,7 +242,7 @@ func TestMerkleTree_RebuildTree(t *testing.T) {
 		if err != nil {
 			t.Errorf("[case:%d] error: unexpected error:  %v", table[i].testCaseId, err)
 		}
-		if bytes.Compare(tree.MerkleRoot, table[i].expectedHash) != 0 {
+		if !bytes.Equal(tree.MerkleRoot, table[i].expectedHash) {
 			t.Errorf("[case:%d] error: expected hash equal to %v got %v", table[i].testCaseId, table[i].expectedHash, tree.MerkleRoot)
 		}
 	}
@@ -267,7 +267,7 @@ func TestMerkleTree_RebuildTreeWith(t *testing.T) {
 		if err != nil {
 			t.Errorf("[case:%d] error: unexpected error: %v", table[i].testCaseId, err)
 		}
-		if bytes.Compare(tree.MerkleRoot, table[i+1].expectedHash) != 0 {
+		if !bytes.Equal(tree.MerkleRoot, table[i+1].expectedHash) {
 			t.Errorf("[case:%d] error: expected hash equal to %v got %v", table[i].testCaseId, table[i+1].expectedHash, tree.MerkleRoot)
 		}
 	}
@@ -419,7 +419,7 @@ func TestMerkleTree_MerklePath(t *testing.T) {
 					t.Errorf("[case:%d] error: calHash error: %v", table[i].testCaseId, err)
 				}
 			}
-			if bytes.Compare(tree.MerkleRoot, hash) != 0 {
+			if !bytes.Equal(tree.MerkleRoot, hash) {
 				t.Errorf("[case:%d] error: expected hash equal to %v got %v", table[i].testCaseId, hash, tree.MerkleRoot)
 			}
 		}

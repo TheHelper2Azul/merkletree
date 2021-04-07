@@ -38,7 +38,7 @@ func TestBucketpools_CalculateHash(t *testing.T) {
 	}
 	for _, table := range tables {
 		value, _ := table.bucket.CalculateHash()
-		if bytes.Compare(value, table.hash) != 0 {
+		if !bytes.Equal(value, table.hash) {
 			t.Errorf("Value of %v was incorrect, got: %v, want: %v.", table.bucket, value, table.hash)
 		}
 	}

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -50,7 +51,7 @@ func (b Bucket) CalculateHash() ([]byte, error) {
 // order to implement Content from merkle_tree.
 func (b Bucket) Equals(other Content) (bool, error) {
 	// Extend for other fields, but which? Do we need all fields?
-	if bytes.Compare(b.Content.Bytes(), other.(Bucket).Content.Bytes()) != 0 {
+	if !bytes.Equal(b.Content.Bytes(), other.(Bucket).Content.Bytes()) {
 		return false, nil
 	}
 	if b.size != other.(Bucket).size {
@@ -80,6 +81,19 @@ type StorageBucket struct {
 	Timestamp time.Time
 }
 
+// Custom marshaler for StorageBucket type
+func (sb StorageBucket) MarshalJSON() ([]byte, error) {
+	type _StorageBucket StorageBucket
+	var out = struct {
+		Type string `json:"_type"`
+		_StorageBucket
+	}{
+		Type:           "StorageBucket",
+		_StorageBucket: _StorageBucket(sb),
+	}
+	return json.Marshal(out)
+}
+
 // CalculateHash calculates the hash of a StorageBucket. Is needed for a StorageBucket in
 // order to implement Content from merkle_tree.
 func (sb StorageBucket) CalculateHash() ([]byte, error) {
@@ -94,19 +108,19 @@ func (sb StorageBucket) CalculateHash() ([]byte, error) {
 // order to implement Content from merkle_tree.
 func (sb StorageBucket) Equals(other Content) (bool, error) {
 	// Extend for other fields, but which? Do we need all fields?
-	if bytes.Compare(sb.Content, other.(StorageBucket).Content) != 0 {
+	if !bytes.Equal(sb.Content, other.(*StorageBucket).Content) {
 		return false, nil
 	}
-	if sb.Size != other.(StorageBucket).Size {
+	if sb.Size != other.(*StorageBucket).Size {
 		return false, nil
 	}
-	if sb.ID != other.(StorageBucket).ID {
+	if sb.ID != other.(*StorageBucket).ID {
 		return false, nil
 	}
-	if sb.Topic != other.(StorageBucket).Topic {
+	if sb.Topic != other.(*StorageBucket).Topic {
 		return false, nil
 	}
-	if sb.HashRate != other.(StorageBucket).HashRate {
+	if sb.HashRate != other.(*StorageBucket).HashRate {
 		return false, nil
 	}
 	return true, nil

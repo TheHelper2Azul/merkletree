@@ -12,6 +12,11 @@ import (
 	"hash"
 )
 
+var newContent = map[string]func() Content{
+	"StorageBucket": func() Content { return new(StorageBucket) },
+	"ByteContent":   func() Content { return new(ByteContent) },
+}
+
 // Content represents the data that is stored and verified by the tree. A type that
 // implements this interface can be used as an item in the tree.
 type Content interface {
@@ -38,16 +43,31 @@ func GetHashStrategies() map[string]hash.Hash {
 }
 
 // ByteContent enables one to use (root) hashes as merkletree Content
-type ByteContent []byte
+type ByteContent struct {
+	Content []byte
+}
+
+// Custom marshaler for ByteContent type
+func (bc ByteContent) MarshalJSON() ([]byte, error) {
+	type _ByteContent ByteContent
+	var out = struct {
+		Type string `json:"_type"`
+		_ByteContent
+	}{
+		Type:         "ByteContent",
+		_ByteContent: _ByteContent(bc),
+	}
+	return json.Marshal(out)
+}
 
 // CalculateHash for ByteContent in order to implement Content.
 func (bc ByteContent) CalculateHash() ([]byte, error) {
-	return []byte(bc), nil
+	return bc.Content, nil
 }
 
 // Equals returns true if two ByteContents are identical, false otherwise
 func (bc ByteContent) Equals(other Content) (bool, error) {
-	if bytes.Compare(bc, other.(ByteContent)) != 0 {
+	if !bytes.Equal(bc.Content, other.(ByteContent).Content) {
 		return false, nil
 	}
 	return true, nil
@@ -66,39 +86,83 @@ type Node struct {
 	Dup    bool
 }
 
-// UnmarshalJSON custom unmarshals a node casting Content to StorageBucket
-func (n *Node) UnmarshalJSON(data []byte) error {
+// UnmarshalJSON is a custom unmarshaler for nodes
+func (n *Node) UnmarshalJSON(byteData []byte) error {
 	var node struct {
 		Left   *Node
 		Right  *Node
 		Hash   []byte
-		C      StorageBucket
+		C      json.RawMessage
 		tree   *MerkleTree
 		parent *Node
 		leaf   bool
 		Dup    bool
 	}
-	if err := json.Unmarshal(data, &node); err != nil {
+	if err := json.Unmarshal(byteData, &node); err != nil {
 		return err
 	}
 	n.Left = node.Left
 	n.Right = node.Right
 	n.Hash = node.Hash
-	n.C = node.C
 	n.tree = node.tree
 	n.parent = node.parent
 	n.leaf = node.leaf
 	n.Dup = node.Dup
 
+	// Check how to cast Content C
+	if len(node.C) > 0 && string(node.C) != `null` {
+
+		var _type struct {
+			Type string `json:"_type"`
+		}
+		if err := json.Unmarshal([]byte(node.C), &_type); err != nil {
+			return err
+		}
+
+		c := newContent[_type.Type]()
+
+		if err := json.Unmarshal([]byte(node.C), c); err != nil {
+			return err
+		}
+
+		n.C = c
+
+	}
 	return nil
 }
+
+// // UnmarshalJSON custom unmarshals a node casting Content to StorageBucket
+// func (n *Node) UnmarshalJSON(data []byte) error {
+// 	var node struct {
+// 		Left   *Node
+// 		Right  *Node
+// 		Hash   []byte
+// 		C      StorageBucket
+// 		tree   *MerkleTree
+// 		parent *Node
+// 		leaf   bool
+// 		Dup    bool
+// 	}
+// 	if err := json.Unmarshal(data, &node); err != nil {
+// 		return err
+// 	}
+// 	n.Left = node.Left
+// 	n.Right = node.Right
+// 	n.Hash = node.Hash
+// 	n.C = node.C
+// 	n.tree = node.tree
+// 	n.parent = node.parent
+// 	n.leaf = node.leaf
+// 	n.Dup = node.Dup
+
+// 	return nil
+// }
 
 //calculateNodeHash is a helper function that calculates the hash of the node.
 func (n *Node) calculateNodeHash() ([]byte, error) {
 	if n.leaf {
 		return n.C.CalculateHash()
 	}
-
 	hashMap := GetHashStrategies()
 	h := hashMap[n.tree.HashStrategy]
 	if _, err := h.Write(append(n.Left.Hash, n.Right.Hash...)); err != nil {
@@ -127,9 +191,7 @@ func NewTree(cs []Content) (*MerkleTree, error) {
 func ForestToTree(trees []MerkleTree) (*MerkleTree, error) {
 	var merkleRoots []Content
 	for _, tree := range trees {
-		sb := StorageBucket{Content: (&tree).MerkleRoot}
-		merkleRoots = append(merkleRoots, sb)
-		// merkleRoots = append(merkleRoots, ByteContent((&tree).MerkleRoot))
+		merkleRoots = append(merkleRoots, ByteContent{Content: (&tree).MerkleRoot})
 	}
 	return NewTree(merkleRoots)
 }
@@ -326,7 +388,7 @@ func (m *MerkleTree) VerifyTree() (bool, error) {
 		return false, err
 	}
 
-	if bytes.Compare(m.MerkleRoot, calculatedMerkleRoot) == 0 {
+	if bytes.Equal(m.MerkleRoot, calculatedMerkleRoot) {
 		return true, nil
 	}
 	return false, nil
@@ -361,7 +423,7 @@ func (m *MerkleTree) VerifyContent(content Content) (bool, error) {
 				if _, err := h.Write(append(leftBytes, rightBytes...)); err != nil {
 					return false, err
 				}
-				if bytes.Compare(h.Sum(nil), currentParent.Hash) != 0 {
+				if !bytes.Equal(h.Sum(nil), currentParent.Hash) {
 					return false, nil
 				}
 				currentParent = currentParent.parent
@@ -403,8 +465,5 @@ func NumNodes(node *Node) int {
 
 // Isempty returns true if merkle tree at @m is empty, false otherwise
 func (m *MerkleTree) Isempty() bool {
-	if m.Root == nil {
-		return true
-	}
-	return false
+	return m.Root == nil
 }
