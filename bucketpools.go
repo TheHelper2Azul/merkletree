@@ -19,14 +19,12 @@ import (
 // @Content is a byte slice of fixed size per @Type
 // @ID is a unique identification string
 // @Type designates the category of data (for instance interest rate or trade)
-// @HashRate sets the frequency of hashing the data of the corresponding type
 // @Timestamp is the (Unix-?)time, the container is hashed
 type Bucket struct {
 	Content *bytes.Buffer
 	// properties of the bucket
-	Topic    string
-	HashRate time.Duration
-	size     uint64
+	Topic string
+	size  uint64
 	// values possibly assigned to the bucket
 	ID string
 	// Timestamp is the time, the filled bucket is put into the pool
@@ -63,9 +61,6 @@ func (b Bucket) Equals(other Content) (bool, error) {
 	if b.Topic != other.(Bucket).Topic {
 		return false, nil
 	}
-	if b.HashRate != other.(Bucket).HashRate {
-		return false, nil
-	}
 	return true, nil
 }
 
@@ -73,9 +68,8 @@ func (b Bucket) Equals(other Content) (bool, error) {
 // In contrast to bucket it is only used for storage in influx and read, not for write.
 type StorageBucket struct {
 	Content []byte
-	// TO DO: make HashRate and Size dependent on Topic?
+	// TO DO: make Size dependent on Topic?
 	Topic     string
-	HashRate  time.Duration
 	Size      uint64
 	ID        string
 	Timestamp time.Time
@@ -120,9 +114,6 @@ func (sb StorageBucket) Equals(other Content) (bool, error) {
 	if sb.Topic != other.(*StorageBucket).Topic {
 		return false, nil
 	}
-	if sb.HashRate != other.(*StorageBucket).HashRate {
-		return false, nil
-	}
 	return true, nil
 }
 
@@ -131,7 +122,6 @@ func bucketToStorage(b Bucket) (sb StorageBucket) {
 
 	sb.Content = b.Content.Bytes()
 	sb.Topic = b.Topic
-	sb.HashRate = b.HashRate
 	sb.Size = b.size
 	sb.ID = b.ID
 	sb.Timestamp = b.Timestamp
@@ -266,7 +256,6 @@ func (sb *StorageBucket) ReadContent() (data [][]byte, err error) {
 		}
 	}
 	return
-
 }
 
 // MakeTree returns a Merkle tree built from the Buckets in the pool @bp

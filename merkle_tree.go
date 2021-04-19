@@ -12,6 +12,8 @@ import (
 	"hash"
 )
 
+// newContent is used for the unified marshalling/unmarshalling of data
+// types implementing the Content interface.
 var newContent = map[string]func() Content{
 	"StorageBucket": func() Content { return new(StorageBucket) },
 	"ByteContent":   func() Content { return new(ByteContent) },
@@ -466,4 +468,23 @@ func NumNodes(node *Node) int {
 // Isempty returns true if merkle tree at @m is empty, false otherwise
 func (m *MerkleTree) Isempty() bool {
 	return m.Root == nil
+}
+
+// DataInStorageTree returns true if @data is in a bucket of @tree along with the bucket.
+func DataInStorageTree(data []byte, tree MerkleTree) (bool, StorageBucket, error) {
+	// oldest date of pool cannot be older than @timestamp as pools are made and stamped after data collection.
+	// First look for first pool after @timestamp.
+	for _, leaf := range tree.Leafs {
+		storageBucket := leaf.C.(StorageBucket)
+		content, err := (&storageBucket).ReadContent()
+		if err != nil {
+			return false, StorageBucket{}, err
+		}
+		for _, item := range content {
+			if bytes.Equal(item, data) {
+				return true, storageBucket, nil
+			}
+		}
+	}
+	return false, StorageBucket{}, nil
 }
